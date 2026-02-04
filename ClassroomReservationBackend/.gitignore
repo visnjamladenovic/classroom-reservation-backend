@@ -1,4 +1,4 @@
-## Build results
+# Build results
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
@@ -14,7 +14,7 @@ bld/
 [Ll]og/
 [Ll]ogs/
 
-## Visual Studio cache/options
+# Visual Studio cache/options
 .vs/
 .vscode/
 *.suo
@@ -22,24 +22,26 @@ bld/
 *.userosscache
 *.sln.docstates
 
-## Rider
+# Rider
 .idea/
+**/.idea/
 *.sln.iml
 
-## Build Results
+# Build files
 *.dll
 *.exe
 *.pdb
 *.cache
 
-## NuGet
+# NuGet
 *.nupkg
 **/packages/*
 !**/packages/build/
 
-## macOS
+# macOS
 .DS_Store
+**/.DS_Store
 
-## User-specific files
+# User-specific files
 appsettings.Development.json
 appsettings.Local.json
