@@ -1,0 +1,27 @@
+﻿services:
+  classroomreservationbackend:
+    image: classroomreservationbackend
+    build:
+      context: .
+      dockerfile: ClassroomReservationBackend/Dockerfile
+    depends_on:
+      - postgres
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=classroom_reservation;Username=admin;Password=Admin123!
+    ports:
+      - "8080:8080"
+
+  postgres:
+    image: postgres:16
+    container_name: classroom-reservation-db
+    environment:
+      POSTGRES_DB: classroom_reservation
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: Admin123!
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
