@@ -1,1 +1,1 @@
-# classroom-reservation-backend
+# Online system for classroom reservation (backend)
