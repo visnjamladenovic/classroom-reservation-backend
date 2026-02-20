@@ -33,7 +33,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
-
+builder.Services.AddScoped<IClassroomService, ClassroomService>();
 var app = builder.Build();
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
