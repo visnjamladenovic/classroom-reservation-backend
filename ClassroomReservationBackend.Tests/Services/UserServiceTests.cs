@@ -3,7 +3,6 @@ using ClassroomReservationBackend.Model.DTO.UserDTO;
 using ClassroomReservationBackend.Model.Entity;
 using ClassroomReservationBackend.Service.UserService;
 using Microsoft.EntityFrameworkCore;
-using NUnit.Framework;
 
 namespace ClassroomReservationBackend.Tests;
 

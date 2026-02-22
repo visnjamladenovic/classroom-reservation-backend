@@ -3,7 +3,6 @@ using ClassroomReservationBackend.Model.DTO.UserDTO;
 using ClassroomReservationBackend.Service.UserService;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
-using NUnit.Framework;
 
 namespace ClassroomReservationBackend.Tests;
 

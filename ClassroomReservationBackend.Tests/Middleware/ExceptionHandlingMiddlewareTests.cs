@@ -1,7 +1,6 @@
 ﻿using System.Net;
 using ClassroomReservationBackend.Middleware;
 using Microsoft.AspNetCore.Http;
-using NUnit.Framework;
 
 namespace ClassroomReservationBackend.Tests;
 

@@ -4,7 +4,6 @@ using ClassroomReservationBackend.Model.Entity;
 using ClassroomReservationBackend.Service.AuthService;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using NUnit.Framework;
 
 namespace ClassroomReservationBackend.Tests;
 
