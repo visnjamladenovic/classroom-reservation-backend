@@ -1,6 +1,5 @@
 ﻿using ClassroomReservationBackend.Data;
 using ClassroomReservationBackend.Model.DTO.ClassroomDTO;
-using ClassroomReservationBackend.Model.Entity;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClassroomReservationBackend.Service.ClassroomService;
