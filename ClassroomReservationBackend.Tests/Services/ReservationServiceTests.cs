@@ -153,6 +153,7 @@ public class ReservationServiceTests
         Assert.ThrowsAsync<ArgumentException>(() =>
             _service.UpdateStatusAsync(reservation.Id, Guid.NewGuid(), request));
     }
+
     [Test]
     public async Task GetAllAsync_WhenNoReservations_ReturnsEmptyList()
     {

@@ -127,6 +127,7 @@ public class UserServiceTests
         var deleted = await _context.Users.FindAsync(user.Id);
         Assert.That(deleted, Is.Null);
     }
+
     [Test]
     public async Task GetAllAsync_WhenSearchByName_ReturnsMatchingUsers()
     {
