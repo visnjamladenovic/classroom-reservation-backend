@@ -16,11 +16,11 @@ public class ClassroomController : ControllerBase
     {
         _classroomService = classroomService;
     }
-
+    
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] ClassroomFilterRequest filter)
     {
-        var classrooms = await _classroomService.GetAllAsync();
+        var classrooms = await _classroomService.GetAllAsync(filter);
         return Ok(classrooms);
     }
 

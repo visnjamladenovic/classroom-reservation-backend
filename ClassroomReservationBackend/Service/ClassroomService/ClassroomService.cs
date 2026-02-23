@@ -13,9 +13,15 @@ public class ClassroomService : IClassroomService
         _context = context;
     }
 
-    public async Task<IEnumerable<ClassroomResponse>> GetAllAsync()
+    public async Task<IEnumerable<ClassroomResponse>> GetAllAsync(ClassroomFilterRequest? filter = null)
     {
-        return await _context.Classrooms
+        var query = _context.Classrooms.AsQueryable();
+
+        if (filter != null)
+            query = ApplyFilters(query, filter);
+
+        return await query
+            .OrderBy(c => c.Name)
             .Select(c => MapToResponse(c))
             .ToListAsync();
     }
@@ -82,6 +88,55 @@ public class ClassroomService : IClassroomService
 
         _context.Classrooms.Remove(classroom);
         await _context.SaveChangesAsync();
+    }
+
+    private IQueryable<Classroom> ApplyFilters(IQueryable<Classroom> query, ClassroomFilterRequest filter)
+    {
+        // Text search across name, room number, and location
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var term = filter.Search.ToLower();
+            query = query.Where(c =>
+                c.Name.ToLower().Contains(term) ||
+                c.RoomNumber.ToLower().Contains(term) ||
+                c.Location.ToLower().Contains(term));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.ClassroomType))
+            query = query.Where(c => c.ClassroomType == filter.ClassroomType);
+
+        if (filter.MinCapacity.HasValue)
+            query = query.Where(c => c.Capacity >= filter.MinCapacity.Value);
+
+        if (filter.MaxCapacity.HasValue)
+            query = query.Where(c => c.Capacity <= filter.MaxCapacity.Value);
+
+        if (filter.HasProjector.HasValue)
+            query = query.Where(c => c.HasProjector == filter.HasProjector.Value);
+
+        if (filter.HasWhiteboard.HasValue)
+            query = query.Where(c => c.HasWhiteboard == filter.HasWhiteboard.Value);
+
+        if (filter.HasComputers.HasValue)
+            query = query.Where(c => c.HasComputers == filter.HasComputers.Value);
+
+        if (filter.IsActive.HasValue)
+            query = query.Where(c => c.IsActive == filter.IsActive.Value);
+
+        // Availability: exclude classrooms that have an overlapping approved/pending reservation
+        if (filter.AvailableFrom.HasValue && filter.AvailableTo.HasValue)
+        {
+            var from = filter.AvailableFrom.Value;
+            var to = filter.AvailableTo.Value;
+
+            query = query.Where(c => !c.Reservations.Any(r =>
+                r.Status != "Rejected" &&
+                r.Status != "Cancelled" &&
+                r.StartTime < to &&
+                r.EndTime > from));
+        }
+
+        return query;
     }
 
     private static ClassroomResponse MapToResponse(Classroom c) => new()
