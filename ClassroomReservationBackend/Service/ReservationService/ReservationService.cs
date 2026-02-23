@@ -25,7 +25,7 @@ public class ReservationService : IReservationService
         query = ApplyFilters(query, filter);
 
         return await query
-            .OrderByDescending(r => r.CreatedAt)
+            .OrderByDescending(r => r.StartTime)
             .Select(r => MapToResponse(r))
             .ToListAsync();
     }
@@ -43,7 +43,7 @@ public class ReservationService : IReservationService
         query = ApplyFilters(query, filter);
 
         return await query
-            .OrderByDescending(r => r.CreatedAt)
+            .OrderByDescending(r => r.StartTime)
             .Select(r => MapToResponse(r))
             .ToListAsync();
     }
@@ -163,7 +163,8 @@ public class ReservationService : IReservationService
         reservation.Status = request.Status;
         reservation.UpdatedAt = DateTime.UtcNow;
 
-        if (request.Status == "Approved") {
+        if (request.Status == "Approved")
+        {
             reservation.ApprovedBy = adminId;
             reservation.ApprovedAt = DateTime.UtcNow;
         }
@@ -190,8 +191,18 @@ public class ReservationService : IReservationService
 
     private static IQueryable<Reservation> ApplyFilters(IQueryable<Reservation> query, ReservationFilterRequest filter)
     {
+        // Classroom GUID filter (exact)
         if (filter.ClassroomId.HasValue)
             query = query.Where(r => r.ClassroomId == filter.ClassroomId.Value);
+
+        // Classroom text search — matches name or room number
+        if (!string.IsNullOrWhiteSpace(filter.ClassroomSearch))
+        {
+            var term = filter.ClassroomSearch.ToLower();
+            query = query.Where(r =>
+                r.Classroom.Name.ToLower().Contains(term) ||
+                r.Classroom.RoomNumber.ToLower().Contains(term));
+        }
 
         if (filter.UserId.HasValue)
             query = query.Where(r => r.UserId == filter.UserId.Value);
@@ -202,11 +213,28 @@ public class ReservationService : IReservationService
         if (!string.IsNullOrWhiteSpace(filter.Purpose))
             query = query.Where(r => r.Purpose == filter.Purpose);
 
-        if (filter.From.HasValue)
-            query = query.Where(r => r.StartTime >= filter.From.Value);
+        // Single-day shortcut: ?date=2026-03-01 — overrides From/To
+        if (filter.Date.HasValue)
+        {
+            var dayStart = filter.Date.Value.Date.ToUniversalTime();
+            var dayEnd = dayStart.AddDays(1);
+            // Any reservation that overlaps this day
+            query = query.Where(r => r.StartTime < dayEnd && r.EndTime > dayStart);
+        }
+        else
+        {
+            // Date range overlap: catches any reservation touching the window,
+            // not just those fully contained within it
+            if (filter.From.HasValue)
+                query = query.Where(r => r.EndTime > filter.From.Value);
 
-        if (filter.To.HasValue)
-            query = query.Where(r => r.EndTime <= filter.To.Value);
+            if (filter.To.HasValue)
+                query = query.Where(r => r.StartTime < filter.To.Value);
+        }
+
+        // Only future/ongoing reservations
+        if (filter.Upcoming == true)
+            query = query.Where(r => r.EndTime > DateTime.UtcNow);
 
         return query;
     }
