@@ -62,7 +62,7 @@ public class ReservationService : IReservationService
 
     public async Task<ReservationResponse> CreateAsync(Guid userId, CreateReservationRequest request)
     {
-        // Fix 3 (ordering): validate times first — these require no DB access
+        // Validate times first — no DB access needed
         if (request.EndTime <= request.StartTime)
             throw new ArgumentException("End time must be after start time.");
 
@@ -75,6 +75,8 @@ public class ReservationService : IReservationService
         if (!classroom.IsActive)
             throw new InvalidOperationException("Classroom is not available.");
 
+        // Overlap check: block if any non-cancelled/non-rejected reservation
+        // overlaps the requested time window on the same classroom
         var hasConflict = await _context.Reservations.AnyAsync(r =>
             r.ClassroomId == request.ClassroomId &&
             r.Status != "Rejected" &&
@@ -125,6 +127,7 @@ public class ReservationService : IReservationService
         if (newEnd <= newStart)
             throw new ArgumentException("End time must be after start time.");
 
+        // Overlap check on update: exclude the reservation being edited
         var hasConflict = await _context.Reservations.AnyAsync(r =>
             r.Id != id &&
             r.ClassroomId == reservation.ClassroomId &&
