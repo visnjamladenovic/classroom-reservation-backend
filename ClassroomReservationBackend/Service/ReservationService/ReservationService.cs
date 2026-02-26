@@ -62,6 +62,7 @@ public class ReservationService : IReservationService
 
     public async Task<ReservationResponse> CreateAsync(Guid userId, CreateReservationRequest request)
     {
+        // Fix 3 (ordering): validate times first — these require no DB access
         if (request.EndTime <= request.StartTime)
             throw new ArgumentException("End time must be after start time.");
 
@@ -150,15 +151,21 @@ public class ReservationService : IReservationService
 
     public async Task<ReservationResponse> UpdateStatusAsync(Guid id, Guid adminId, ReservationStatusRequest request)
     {
+        // Fix 3: fetch reservation first so a missing ID returns 404, not 400
+        var reservation = await _context.Reservations.FindAsync(id)
+                          ?? throw new KeyNotFoundException("Reservation not found.");
+
         var validStatuses = new[] { "Approved", "Rejected", "Cancelled" };
         if (!validStatuses.Contains(request.Status))
             throw new ArgumentException($"Invalid status. Valid values: {string.Join(", ", validStatuses)}");
 
-        var reservation = await _context.Reservations.FindAsync(id)
-                          ?? throw new KeyNotFoundException("Reservation not found.");
-
-        if (reservation.Status != "Pending")
+        // Fix 4: allow cancelling approved reservations; only block approve/reject on non-pending
+        if (request.Status != "Cancelled" && reservation.Status != "Pending")
             throw new InvalidOperationException("Only pending reservations can be approved or rejected.");
+
+        // Prevent cancelling an already-cancelled or rejected reservation
+        if (request.Status == "Cancelled" && reservation.Status is "Cancelled" or "Rejected")
+            throw new InvalidOperationException($"Cannot cancel a reservation with status '{reservation.Status}'.");
 
         reservation.Status = request.Status;
         reservation.UpdatedAt = DateTime.UtcNow;
@@ -191,11 +198,9 @@ public class ReservationService : IReservationService
 
     private static IQueryable<Reservation> ApplyFilters(IQueryable<Reservation> query, ReservationFilterRequest filter)
     {
-        // Classroom GUID filter (exact)
         if (filter.ClassroomId.HasValue)
             query = query.Where(r => r.ClassroomId == filter.ClassroomId.Value);
 
-        // Classroom text search — matches name or room number
         if (!string.IsNullOrWhiteSpace(filter.ClassroomSearch))
         {
             var term = filter.ClassroomSearch.ToLower();
@@ -218,13 +223,11 @@ public class ReservationService : IReservationService
         {
             var dayStart = filter.Date.Value.Date.ToUniversalTime();
             var dayEnd = dayStart.AddDays(1);
-            // Any reservation that overlaps this day
             query = query.Where(r => r.StartTime < dayEnd && r.EndTime > dayStart);
         }
         else
         {
-            // Date range overlap: catches any reservation touching the window,
-            // not just those fully contained within it
+            // Date range overlap: catches any reservation touching the window
             if (filter.From.HasValue)
                 query = query.Where(r => r.EndTime > filter.From.Value);
 
@@ -232,7 +235,6 @@ public class ReservationService : IReservationService
                 query = query.Where(r => r.StartTime < filter.To.Value);
         }
 
-        // Only future/ongoing reservations
         if (filter.Upcoming == true)
             query = query.Where(r => r.EndTime > DateTime.UtcNow);
 
