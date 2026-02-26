@@ -19,15 +19,17 @@ public class ClassroomControllerTests
         _controller = new ClassroomController(_mockService.Object);
     }
 
+    
     [Test]
     public async Task GetAll_ReturnsOkWithClassrooms()
     {
-        _mockService.Setup(s => s.GetAllAsync())
+        var filter = new ClassroomFilterRequest();
+        _mockService.Setup(s => s.GetAllAsync(filter))
             .ReturnsAsync(new List<ClassroomResponse>
             {
                 new ClassroomResponse { Id = Guid.NewGuid(), Name = "Room 1" }
             });
-        var result = await _controller.GetAll();
+        var result = await _controller.GetAll(filter);
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
     }
 

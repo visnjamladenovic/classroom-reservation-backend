@@ -67,6 +67,11 @@ public class ReservationService : IReservationService
 
         if (request.StartTime < DateTime.UtcNow)
             throw new ArgumentException("Cannot create a reservation in the past.");
+        if (request.StartTime.Hour < 8 || request.StartTime.Hour >= 20)
+            throw new ArgumentException("Reservations can only start between 08:00 and 20:00.");
+
+        if (request.EndTime.Hour > 20 || (request.EndTime.Hour == 20 && request.EndTime.Minute > 0))
+            throw new ArgumentException("Reservations must end by 20:00.");
 
         var classroom = await _context.Classrooms.FindAsync(request.ClassroomId)
                         ?? throw new KeyNotFoundException("Classroom not found.");
@@ -83,6 +88,8 @@ public class ReservationService : IReservationService
 
         if (hasConflict)
             throw new InvalidOperationException("The classroom is already booked for this time slot.");
+        if (request.AttendeeCount.HasValue && request.AttendeeCount.Value > classroom.Capacity)
+            throw new ArgumentException($"Attendee count ({request.AttendeeCount.Value}) exceeds classroom capacity ({classroom.Capacity}).");
 
         var reservation = new Reservation
         {

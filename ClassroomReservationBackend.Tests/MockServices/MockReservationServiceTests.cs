@@ -63,8 +63,8 @@ public class MockReservationServiceTests
         {
             ClassroomId = Guid.NewGuid(),
             Title = "Test",
-            StartTime = DateTime.UtcNow.AddHours(1),
-            EndTime = DateTime.UtcNow.AddHours(2)
+            StartTime = DateTime.UtcNow.Date.AddDays(1).AddHours(10),
+            EndTime = DateTime.UtcNow.Date.AddDays(1).AddHours(12)
         };
         Assert.ThrowsAsync<KeyNotFoundException>(() =>
             _service.CreateAsync(Guid.NewGuid(), request));
@@ -93,13 +93,12 @@ public class MockReservationServiceTests
         {
             ClassroomId = classroomId,
             Title = "Test",
-            StartTime = DateTime.UtcNow.AddHours(1),
-            EndTime = DateTime.UtcNow.AddHours(2)
+            StartTime = DateTime.UtcNow.Date.AddDays(1).AddHours(10),
+            EndTime = DateTime.UtcNow.Date.AddDays(1).AddHours(12)
         };
         Assert.ThrowsAsync<InvalidOperationException>(() =>
             _service.CreateAsync(Guid.NewGuid(), request));
     }
-
     [Test]
     public async Task DeleteAsync_WhenUserIsNotOwner_ThrowsUnauthorizedAccessException()
     {
@@ -157,5 +156,64 @@ public class MockReservationServiceTests
         var filter = new ReservationFilterRequest();
         var result = await _service.GetAllAsync(filter);
         Assert.That(result, Is.Empty);
+    }
+    [Test]
+    public async Task CreateAsync_WhenStartTimeBeforeWorkingHours_ThrowsArgumentException()
+    {
+        var request = new CreateReservationRequest
+        {
+            ClassroomId = Guid.NewGuid(),
+            Title = "Test",
+            StartTime = DateTime.UtcNow.Date.AddDays(1).AddHours(6),
+            EndTime = DateTime.UtcNow.Date.AddDays(1).AddHours(9)
+        };
+        Assert.ThrowsAsync<ArgumentException>(() =>
+            _service.CreateAsync(Guid.NewGuid(), request));
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenEndTimeAfterWorkingHours_ThrowsArgumentException()
+    {
+        var request = new CreateReservationRequest
+        {
+            ClassroomId = Guid.NewGuid(),
+            Title = "Test",
+            StartTime = DateTime.UtcNow.Date.AddDays(1).AddHours(18),
+            EndTime = DateTime.UtcNow.Date.AddDays(1).AddHours(21)
+        };
+        Assert.ThrowsAsync<ArgumentException>(() =>
+            _service.CreateAsync(Guid.NewGuid(), request));
+    }
+    [Test]
+    public async Task CreateAsync_WhenAttendeeCountExceedsCapacity_ThrowsArgumentException()
+    {
+        var classroomId = Guid.NewGuid();
+        var classroom = new Classroom
+        {
+            Id = classroomId,
+            Name = "Test Room",
+            RoomNumber = "101",
+            Location = "Building A",
+            Capacity = 30,
+            ClassroomType = "Lecture",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        var mockDbSet = new List<Classroom> { classroom }.AsQueryable().BuildMockDbSet();
+        mockDbSet.Setup(m => m.FindAsync(classroomId)).ReturnsAsync(classroom);
+        _mockContext.Setup(c => c.Classrooms).Returns(mockDbSet.Object);
+        var mockResDbSet = new List<Reservation>().AsQueryable().BuildMockDbSet();
+        _mockContext.Setup(c => c.Reservations).Returns(mockResDbSet.Object);
+        var request = new CreateReservationRequest
+        {
+            ClassroomId = classroomId,
+            Title = "Test",
+            StartTime = DateTime.UtcNow.AddHours(1),
+            EndTime = DateTime.UtcNow.AddHours(2),
+            AttendeeCount = 50
+        };
+        Assert.ThrowsAsync<ArgumentException>(() =>
+            _service.CreateAsync(Guid.NewGuid(), request));
     }
 }

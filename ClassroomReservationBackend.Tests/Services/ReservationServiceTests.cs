@@ -59,6 +59,7 @@ public class ReservationServiceTests
             _service.CreateAsync(Guid.NewGuid(), request));
     }
 
+    
     [Test]
     public async Task CreateAsync_WhenClassroomNotFound_ThrowsKeyNotFoundException()
     {
@@ -66,10 +67,9 @@ public class ReservationServiceTests
         {
             ClassroomId = Guid.NewGuid(),
             Title = "Test",
-            StartTime = DateTime.UtcNow.AddHours(1),
-            EndTime = DateTime.UtcNow.AddHours(2)
+            StartTime = DateTime.UtcNow.Date.AddDays(1).AddHours(9),
+            EndTime = DateTime.UtcNow.Date.AddDays(1).AddHours(11)
         };
-
         Assert.ThrowsAsync<KeyNotFoundException>(() =>
             _service.CreateAsync(Guid.NewGuid(), request));
     }
@@ -77,9 +77,10 @@ public class ReservationServiceTests
     [Test]
     public async Task CreateAsync_WhenClassroomNotActive_ThrowsInvalidOperationException()
     {
+        var classroomId = Guid.NewGuid();
         var classroom = new Classroom
         {
-            Id = Guid.NewGuid(),
+            Id = classroomId,
             Name = "Test Room",
             RoomNumber = "101",
             Location = "Building A",
@@ -94,12 +95,11 @@ public class ReservationServiceTests
 
         var request = new CreateReservationRequest
         {
-            ClassroomId = classroom.Id,
+            ClassroomId = classroomId,
             Title = "Test",
-            StartTime = DateTime.UtcNow.AddHours(1),
-            EndTime = DateTime.UtcNow.AddHours(2)
+            StartTime = DateTime.UtcNow.Date.AddDays(1).AddHours(9),
+            EndTime = DateTime.UtcNow.Date.AddDays(1).AddHours(11)
         };
-
         Assert.ThrowsAsync<InvalidOperationException>(() =>
             _service.CreateAsync(Guid.NewGuid(), request));
     }
