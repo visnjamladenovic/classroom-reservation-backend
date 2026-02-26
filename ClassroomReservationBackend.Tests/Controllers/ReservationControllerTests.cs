@@ -1,133 +1,70 @@
 ﻿using System.Security.Claims;
+using ClassroomReservationBackend.Controller;
 using ClassroomReservationBackend.Model.DTO.ReservationDTO;
 using ClassroomReservationBackend.Service.ReservationService;
-using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Moq;
+using NUnit.Framework;
 
-namespace ClassroomReservationBackend.Controller;
+namespace ClassroomReservationBackend.Tests;
 
-[ApiController]
-[Route("api/[controller]")]
-[Authorize]
-public class ReservationController : ControllerBase
+[TestFixture]
+public class ReservationControllerTests
 {
-    private readonly IReservationService _reservationService;
+    private Mock<IReservationService> _mockService;
+    private ReservationController _controller;
 
-    public ReservationController(IReservationService reservationService)
+    [SetUp]
+    public void Setup()
     {
-        _reservationService = reservationService;
+        _mockService = new Mock<IReservationService>();
+        _controller = new ReservationController(_mockService.Object);
+        var userId = Guid.NewGuid();
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+            new Claim(ClaimTypes.Role, "User")
+        };
+        var identity = new ClaimsIdentity(claims, "Test");
+        var principal = new ClaimsPrincipal(identity);
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = principal }
+        };
     }
 
-    /// <summary>
-    /// Get all reservations (Admin only), with optional filters.
-    /// </summary>
-    [HttpGet]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> GetAll([FromQuery] ReservationFilterRequest filter)
+    [Test]
+    public async Task GetAll_ReturnsOk()
     {
-        var reservations = await _reservationService.GetAllAsync(filter);
-        return Ok(reservations);
+        var filter = new ReservationFilterRequest();
+        _mockService.Setup(s => s.GetAllAsync(filter))
+            .ReturnsAsync(new List<ReservationResponse>
+            {
+                new ReservationResponse { Id = Guid.NewGuid(), Title = "Test" }
+            });
+        var result = await _controller.GetAll(filter);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
     }
 
-    /// <summary>
-    /// Get current user's reservations, with optional filters.
-    /// </summary>
-    [HttpGet("my")]
-    public async Task<IActionResult> GetMy([FromQuery] ReservationFilterRequest filter)
+    [Test]
+    public async Task Update_ReturnsOk()
     {
-        var userId = GetUserId();
-        var reservations = await _reservationService.GetMyReservationsAsync(userId, filter);
-        return Ok(reservations);
+        var id = Guid.NewGuid();
+        var request = new UpdateReservationRequest { Title = "Updated" };
+        _mockService.Setup(s => s.UpdateAsync(id, It.IsAny<Guid>(), It.IsAny<bool>(), request))
+            .ReturnsAsync(new ReservationResponse { Id = id, Title = "Updated" });
+        var result = await _controller.Update(id, request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
     }
 
-    /// <summary>
-    /// Get a single reservation by ID.
-    /// </summary>
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetById(Guid id)
+    [Test]
+    public async Task Delete_ReturnsNoContent()
     {
-        var reservation = await _reservationService.GetByIdAsync(id);
-
-        // Regular users can only view their own reservations
-        if (!IsAdmin() && reservation.UserId != GetUserId())
-            return Forbid();
-
-        return Ok(reservation);
+        var id = Guid.NewGuid();
+        _mockService.Setup(s => s.DeleteAsync(id, It.IsAny<Guid>(), It.IsAny<bool>()))
+            .Returns(Task.CompletedTask);
+        var result = await _controller.Delete(id);
+        Assert.That(result, Is.InstanceOf<NoContentResult>());
     }
-
-    /// <summary>
-    /// Create a new reservation.
-    /// </summary>
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateReservationRequest request)
-    {
-        var userId = GetUserId();
-        var reservation = await _reservationService.CreateAsync(userId, request);
-        return CreatedAtAction(nameof(GetById), new { id = reservation.Id }, reservation);
-    }
-
-    /// <summary>
-    /// Update an existing reservation (owner or Admin).
-    /// </summary>
-    [HttpPut("{id}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateReservationRequest request)
-    {
-        var userId = GetUserId();
-        var isAdmin = IsAdmin();
-        var reservation = await _reservationService.UpdateAsync(id, userId, isAdmin, request);
-        return Ok(reservation);
-    }
-
-    /// <summary>
-    /// Approve, reject, or cancel a reservation (Admin only).
-    /// </summary>
-    [HttpPatch("{id}/status")]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] ReservationStatusRequest request)
-    {
-        var adminId = GetUserId();
-        var reservation = await _reservationService.UpdateStatusAsync(id, adminId, request);
-        return Ok(reservation);
-    }
-
-    /// <summary>
-    /// Cancel own reservation (sets status to Cancelled).
-    /// </summary>
-    [HttpPatch("{id}/cancel")]
-    public async Task<IActionResult> Cancel(Guid id)
-    {
-        var userId = GetUserId();
-        var existing = await _reservationService.GetByIdAsync(id);
-
-        if (existing.UserId != userId && !IsAdmin())
-            return Forbid();
-
-        var result =
-            await _reservationService.UpdateStatusAsync(id, userId,
-                new ReservationStatusRequest { Status = "Cancelled" });
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// Delete a reservation (Admin or owner of Pending reservation).
-    /// </summary>
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(Guid id)
-    {
-        var userId = GetUserId();
-        var isAdmin = IsAdmin();
-        await _reservationService.DeleteAsync(id, userId, isAdmin);
-        return NoContent();
-    }
-
-    private Guid GetUserId()
-    {
-        var value = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                    ?? User.FindFirst("sub")?.Value
-                    ?? throw new UnauthorizedAccessException("User ID not found in token.");
-        return Guid.Parse(value);
-    }
-
-    private bool IsAdmin() =>
-        User.IsInRole("Admin");
 }
