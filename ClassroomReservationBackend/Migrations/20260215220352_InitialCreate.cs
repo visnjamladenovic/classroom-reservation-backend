@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace ClassroomReservationBackend.Migration
+namespace ClassroomReservationBackend.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Microsoft.EntityFrameworkCore.Migrations.Migration

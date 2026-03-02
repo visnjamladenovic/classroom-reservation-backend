@@ -1,5 +1,6 @@
 ﻿using ClassroomReservationBackend.Data;
 using ClassroomReservationBackend.Model.DTO.ClassroomDTO;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClassroomReservationBackend.Service.ClassroomService;
@@ -12,7 +13,7 @@ public class ClassroomService : IClassroomService
     {
         _context = context;
     }
-
+    
     public async Task<IEnumerable<ClassroomResponse>> GetAllAsync(ClassroomFilterRequest? filter = null)
     {
         var query = _context.Classrooms.AsQueryable();
@@ -95,11 +96,11 @@ public class ClassroomService : IClassroomService
         // Text search across name, room number, and location
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            var term = filter.Search.ToLower();
+            var term = $"%{filter.Search}%";
             query = query.Where(c =>
-                c.Name.ToLower().Contains(term) ||
-                c.RoomNumber.ToLower().Contains(term) ||
-                c.Location.ToLower().Contains(term));
+                EF.Functions.ILike(c.Name, term) ||
+                EF.Functions.ILike(c.RoomNumber, term) ||
+                EF.Functions.ILike(c.Location, term));
         }
 
         if (!string.IsNullOrWhiteSpace(filter.ClassroomType))

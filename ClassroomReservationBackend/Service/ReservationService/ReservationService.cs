@@ -43,7 +43,7 @@ public class ReservationService : IReservationService
         query = ApplyFilters(query, filter);
 
         return await query
-            .OrderByDescending(r => r.StartTime)
+            .OrderByDescending(r => r.CreatedAt)
             .Select(r => MapToResponse(r))
             .ToListAsync();
     }
@@ -62,17 +62,11 @@ public class ReservationService : IReservationService
 
     public async Task<ReservationResponse> CreateAsync(Guid userId, CreateReservationRequest request)
     {
-        // Validate times first — no DB access needed
         if (request.EndTime <= request.StartTime)
             throw new ArgumentException("End time must be after start time.");
 
         if (request.StartTime < DateTime.UtcNow)
             throw new ArgumentException("Cannot create a reservation in the past.");
-        if (request.StartTime.Hour < 8 || request.StartTime.Hour >= 20)
-            throw new ArgumentException("Reservations can only start between 08:00 and 20:00.");
-
-        if (request.EndTime.Hour > 20 || (request.EndTime.Hour == 20 && request.EndTime.Minute > 0))
-            throw new ArgumentException("Reservations must end by 20:00.");
 
         var classroom = await _context.Classrooms.FindAsync(request.ClassroomId)
                         ?? throw new KeyNotFoundException("Classroom not found.");
@@ -80,8 +74,6 @@ public class ReservationService : IReservationService
         if (!classroom.IsActive)
             throw new InvalidOperationException("Classroom is not available.");
 
-        // Overlap check: block if any non-cancelled/non-rejected reservation
-        // overlaps the requested time window on the same classroom
         var hasConflict = await _context.Reservations.AnyAsync(r =>
             r.ClassroomId == request.ClassroomId &&
             r.Status != "Rejected" &&
@@ -91,8 +83,6 @@ public class ReservationService : IReservationService
 
         if (hasConflict)
             throw new InvalidOperationException("The classroom is already booked for this time slot.");
-        if (request.AttendeeCount.HasValue && request.AttendeeCount.Value > classroom.Capacity)
-            throw new ArgumentException($"Attendee count ({request.AttendeeCount.Value}) exceeds classroom capacity ({classroom.Capacity}).");
 
         var reservation = new Reservation
         {
@@ -134,7 +124,6 @@ public class ReservationService : IReservationService
         if (newEnd <= newStart)
             throw new ArgumentException("End time must be after start time.");
 
-        // Overlap check on update: exclude the reservation being edited
         var hasConflict = await _context.Reservations.AnyAsync(r =>
             r.Id != id &&
             r.ClassroomId == reservation.ClassroomId &&
@@ -161,27 +150,20 @@ public class ReservationService : IReservationService
 
     public async Task<ReservationResponse> UpdateStatusAsync(Guid id, Guid adminId, ReservationStatusRequest request)
     {
-        // Fix 3: fetch reservation first so a missing ID returns 404, not 400
-        var reservation = await _context.Reservations.FindAsync(id)
-                          ?? throw new KeyNotFoundException("Reservation not found.");
-
         var validStatuses = new[] { "Approved", "Rejected", "Cancelled" };
         if (!validStatuses.Contains(request.Status))
             throw new ArgumentException($"Invalid status. Valid values: {string.Join(", ", validStatuses)}");
 
-        // Fix 4: allow cancelling approved reservations; only block approve/reject on non-pending
-        if (request.Status != "Cancelled" && reservation.Status != "Pending")
-            throw new InvalidOperationException("Only pending reservations can be approved or rejected.");
+        var reservation = await _context.Reservations.FindAsync(id)
+                          ?? throw new KeyNotFoundException("Reservation not found.");
 
-        // Prevent cancelling an already-cancelled or rejected reservation
-        if (request.Status == "Cancelled" && reservation.Status is "Cancelled" or "Rejected")
-            throw new InvalidOperationException($"Cannot cancel a reservation with status '{reservation.Status}'.");
+        if (reservation.Status != "Pending")
+            throw new InvalidOperationException("Only pending reservations can be approved or rejected.");
 
         reservation.Status = request.Status;
         reservation.UpdatedAt = DateTime.UtcNow;
 
-        if (request.Status == "Approved")
-        {
+        if (request.Status == "Approved") {
             reservation.ApprovedBy = adminId;
             reservation.ApprovedAt = DateTime.UtcNow;
         }
@@ -211,14 +193,6 @@ public class ReservationService : IReservationService
         if (filter.ClassroomId.HasValue)
             query = query.Where(r => r.ClassroomId == filter.ClassroomId.Value);
 
-        if (!string.IsNullOrWhiteSpace(filter.ClassroomSearch))
-        {
-            var term = filter.ClassroomSearch.ToLower();
-            query = query.Where(r =>
-                r.Classroom.Name.ToLower().Contains(term) ||
-                r.Classroom.RoomNumber.ToLower().Contains(term));
-        }
-
         if (filter.UserId.HasValue)
             query = query.Where(r => r.UserId == filter.UserId.Value);
 
@@ -228,25 +202,11 @@ public class ReservationService : IReservationService
         if (!string.IsNullOrWhiteSpace(filter.Purpose))
             query = query.Where(r => r.Purpose == filter.Purpose);
 
-        // Single-day shortcut: ?date=2026-03-01 — overrides From/To
-        if (filter.Date.HasValue)
-        {
-            var dayStart = filter.Date.Value.Date.ToUniversalTime();
-            var dayEnd = dayStart.AddDays(1);
-            query = query.Where(r => r.StartTime < dayEnd && r.EndTime > dayStart);
-        }
-        else
-        {
-            // Date range overlap: catches any reservation touching the window
-            if (filter.From.HasValue)
-                query = query.Where(r => r.EndTime > filter.From.Value);
+        if (filter.From.HasValue)
+            query = query.Where(r => r.StartTime >= filter.From.Value);
 
-            if (filter.To.HasValue)
-                query = query.Where(r => r.StartTime < filter.To.Value);
-        }
-
-        if (filter.Upcoming == true)
-            query = query.Where(r => r.EndTime > DateTime.UtcNow);
+        if (filter.To.HasValue)
+            query = query.Where(r => r.EndTime <= filter.To.Value);
 
         return query;
     }
